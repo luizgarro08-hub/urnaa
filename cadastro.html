@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Candidatos</title><link rel="stylesheet" href="style.css"></head>
+<body><nav id="nav"></nav><main><div id="out"></div></main>
+<script src="dados.js"></script>
+<script>
+menu();
+let foto='',msg='',okm=false,msgc='',okc=false;
+const nid=()=>'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const totalVotos=id=>Object.values(db.votes[id]||{}).reduce((a,b)=>a+b,0);
+function cadastro(sel){
+ db=carregar();
+ if(!sel||!CARGOS.some(x=>x.id===sel))sel=CARGOS.length?CARGOS[0].id:'';
+ const c=CARGOS.find(x=>x.id===sel);
+ let h=`<section class="card"><h2>Cargos</h2>
+ <p class="mut">Crie quantos quiser (ex.: Presidente, Líder de turma, Melhor professor). Na urna, aparecem na ordem em que foram criados.</p>
+ <div class="g2"><div><label for="cn">Nome do cargo</label><input id="cn" maxlength="40"></div>
+ <div><label for="cd">Dígitos do número</label><select id="cd">${[1,2,3,4,5].map(n=>`<option value="${n}"${n===2?' selected':''}>${n}</option>`).join('')}</select></div></div>
+ <p style="margin:12px 0 0"><button class="btn" id="cs">Adicionar cargo</button></p>
+ <div class="msg${okc?' ok':''}">${esc(msgc)}</div>`;
+ CARGOS.forEach(x=>h+=`<div class="cl"><div><b>${esc(x.nome)}</b><br><span class="mut">${x.dig} dígitos</span></div><button class="btn sec" data-dc="${x.id}">Excluir</button></div>`);
+ h+='</section>';
+ if(c){
+  h+=`<section class="card"><h2>Cadastrar candidato</h2>
+  <div class="g2"><div><label for="fc">Cargo</label><select id="fc">${CARGOS.map(x=>`<option value="${x.id}"${x.id===sel?' selected':''}>${esc(x.nome)}</option>`).join('')}</select></div>
+  <div><label for="fn">Número (${c.dig} dígitos)</label><input id="fn" inputmode="numeric" maxlength="${c.dig}"></div></div>
+  <label for="fm">Nome</label><input id="fm" maxlength="40">
+  <label for="fp">Partido / grupo (sigla)</label><input id="fp" maxlength="10">
+  <label for="ff">Foto (opcional)</label><input id="ff" type="file" accept="image/*">
+  <p style="margin:12px 0 0"><button class="btn" id="fs">Cadastrar</button></p>
+  <div class="msg${okm?' ok':''}">${esc(msg)}</div></section>`;
+  CARGOS.forEach(x=>{
+   const l=db.cands.filter(k=>k.cargo===x.id);
+   h+=`<section class="card"><h2>${esc(x.nome)}</h2>`+(l.length?'':'<p class="mut">Nenhum candidato ainda.</p>');
+   l.forEach(k=>h+=`<div class="cl">${k.foto?`<img src="${k.foto}" alt="">`:'<span class="ph"></span>'}<div><b>${esc(k.nome)}</b><br><span class="mut">${esc(k.num)} · ${esc(k.partido)}</span></div><button class="btn sec" data-del="${x.id}|${k.num}">Excluir</button></div>`);
+   h+='</section>';
+  });
+ }
+ $('#out').innerHTML=h;foto='';
+ $('#cs').onclick=()=>{
+  const nome=$('#cn').value.trim();okc=false;
+  if(!nome)msgc='Digite o nome do cargo.';
+  else if(CARGOS.some(x=>x.nome.toLowerCase()===nome.toLowerCase()))msgc='Já existe um cargo com esse nome.';
+  else{const id=nid();db.cargos.push({id,nome,dig:+$('#cd').value});salvar();msgc='Cargo adicionado.';okc=true;sel=id}
+  msg='';cadastro(sel);
+ };
+ if(!c)return;
+ $('#fc').onchange=e=>{msg='';cadastro(e.target.value)};
+ $('#ff').onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+   const cv=document.createElement('canvas');cv.width=120;cv.height=156;const x=cv.getContext('2d');
+   const s=Math.max(120/im.width,156/im.height),w=im.width*s,hh=im.height*s;
+   x.drawImage(im,(120-w)/2,(156-hh)/2,w,hh);foto=cv.toDataURL('image/jpeg',.7)};im.src=r.result};r.readAsDataURL(f)};
+ $('#fs').onclick=()=>{
+  const num=$('#fn').value.trim(),nome=$('#fm').value.trim(),par=$('#fp').value.trim().toUpperCase();
+  okm=false;msgc='';
+  if(!/^\d+$/.test(num)||num.length!==c.dig)msg=`O número deve ter exatamente ${c.dig} dígitos.`;
+  else if(!nome)msg='Informe o nome do candidato.';
+  else if(db.cands.some(k=>k.cargo===sel&&k.num===num))msg='Esse número já está em uso neste cargo.';
+  else{db.cands.push({cargo:sel,num,nome,partido:par||'S/P',foto});salvar();msg='Candidato cadastrado.';okm=true}
+  cadastro(sel);
+ };
+}
+$('#out').onclick=e=>{
+ const bd=e.target.closest('[data-del]'),bc=e.target.closest('[data-dc]');
+ const sel=($('#fc')||{}).value;
+ if(bd){
+  const [cg,n]=bd.dataset.del.split('|');db=carregar();msgc='';
+  if(((db.votes[cg]||{})[n]||0)>0){msg='Este candidato já tem votos. Zere a apuração antes de excluir.';okm=false}
+  else{db.cands=db.cands.filter(k=>!(k.cargo===cg&&k.num===n));salvar();msg='Candidato excluído.';okm=true}
+  cadastro(sel);
+ }else if(bc){
+  const id=bc.dataset.dc;db=carregar();msg='';okc=false;
+  if(db.cands.some(k=>k.cargo===id))msgc='Exclua antes os candidatos deste cargo.';
+  else if(totalVotos(id)>0)msgc='Este cargo já tem votos. Zere a apuração antes de excluir.';
+  else{db.cargos=db.cargos.filter(x=>x.id!==id);delete db.votes[id];salvar();msgc='Cargo excluído.';okc=true}
+  cadastro(sel);
+ }
+};
+exigirPin(()=>cadastro());
+</script></body></html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Urna</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+<div class="mes"><span class="mut" style="margin:0">Mesário: libere o voto para cada eleitor.</span><button class="btn" id="liberar">Liberar eleitor</button></div>
+<div class="urna"><div id="tela"></div>
+<div class="pad"><div class="keys" id="keys"></div>
+<div class="keys"><button class="k f br" id="kb">BRANCO</button><button class="k f co" id="kc">CORRIGE</button><button class="k f cf" id="kf">CONFIRMA</button></div></div></div>
+</main>
+<script src="dados.js"></script>
+<script>
+let ac;
+function beep(f=880,d=.08){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.15,ac.currentTime);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+let phase='wait',cur={i:0,num:'',branco:false};
+function tela(){
+ const el=$('#tela');
+ if(phase==='wait'){el.innerHTML='<div class="c"><div class="big">Aguardando eleitor</div><p class="sm">O mesário deve liberar o voto.</p></div>';return}
+ if(phase==='end'){el.innerHTML='<div class="fim"><div class="fimt">FIM</div><div>VOTOU</div></div>';return}
+ const c=CARGOS[cur.i];
+ let h=`<div class="top">SEU VOTO PARA</div><div class="cargo">${c.nome}</div>`;
+ if(cur.branco)h+='<div class="vb">VOTO EM BRANCO</div>';
+ else{
+  h+='<div class="num"><span class="lb">Número:</span>';
+  for(let k=0;k<c.dig;k++)h+=`<span class="box${k===cur.num.length?' on':''}">${cur.num[k]||''}</span>`;
+  h+='</div>';
+  if(cur.num.length===c.dig){
+   const cd=db.cands.find(x=>x.cargo===c.id&&x.num===cur.num);
+   if(cd)h+=`<div class="info"><div><p>Nome: <b>${esc(cd.nome)}</b></p><p>Partido: <b>${esc(cd.partido)}</b></p></div><div class="foto">${cd.foto?`<img src="${cd.foto}" alt="">`:'<span>sem foto</span>'}<small>${c.nome}</small></div></div>`;
+   else h+='<div class="err">NÚMERO ERRADO<br>VOTO NULO</div>';
+  }
+ }
+ h+='<div class="rod">Aperte a tecla:<br>VERDE para CONFIRMAR este voto<br>LARANJA para REINICIAR este voto</div>';
+ el.innerHTML=h;
+}
+function addVote(cargo,key){db=carregar();const v=db.votes[cargo]=db.votes[cargo]||{};v[key]=(v[key]||0)+1;salvar()}
+function press(d){if(phase!=='vote'||cur.branco)return;if(cur.num.length<CARGOS[cur.i].dig){cur.num+=d;beep();tela()}}
+function branco(){if(phase==='vote'&&!cur.num){cur.branco=true;beep();tela()}}
+function corrige(){if(phase!=='vote')return;cur.num='';cur.branco=false;beep(600);tela()}
+function confirma(){
+ if(phase!=='vote')return;const c=CARGOS[cur.i];
+ if(cur.branco)addVote(c.id,'branco');
+ else if(cur.num.length===c.dig)addVote(c.id,db.cands.some(x=>x.cargo===c.id&&x.num===cur.num)?cur.num:'nulo');
+ else return;
+ cur={i:cur.i+1,num:'',branco:false};
+ if(cur.i>=CARGOS.length){phase='end';beep(700,.9);tela();setTimeout(()=>{phase='wait';tela()},3000)}
+ else{beep(700,.2);tela()}
+}
+$('#keys').innerHTML=[1,2,3,4,5,6,7,8,9,0].map(n=>`<button class="k${n===0?' z':''}" data-n="${n}">${n}</button>`).join('');
+$('#keys').onclick=e=>{const b=e.target.closest('[data-n]');if(b)press(b.dataset.n)};
+$('#kb').onclick=branco;$('#kc').onclick=corrige;$('#kf').onclick=confirma;
+$('#liberar').onclick=()=>{if(phase==='wait'){db=carregar();if(!CARGOS.length){alert('Nenhum cargo cadastrado. Crie em Candidatos.');return}phase='vote';cur={i:0,num:'',branco:false};tela()}};
+document.addEventListener('keydown',e=>{
+ if(/^[0-9]$/.test(e.key))press(e.key);else if(e.key==='Enter')confirma();else if(e.key==='Backspace')corrige();
+});
+tela();
+</script></body></html>

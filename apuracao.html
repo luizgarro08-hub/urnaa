@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Apuração</title><link rel="stylesheet" href="style.css"></head>
+<body><nav id="nav"></nav><main><div id="out"></div></main>
+<script src="dados.js"></script>
+<script>
+menu();
+let zerar=false;
+function dados(c){
+ const v=db.votes[c.id]||{};
+ const cs=db.cands.filter(x=>x.cargo===c.id).map(x=>({...x,n:v[x.num]||0})).sort((a,b)=>b.n-a.n);
+ const br=v.branco||0,nu=v.nulo||0,tot=cs.reduce((s,x)=>s+x.n,0)+br+nu;
+ return{cs,br,nu,tot};
+}
+function apurar(){
+ db=carregar();
+ let h='<p><button class="btn sec" id="csv">Baixar CSV</button> <span class="mut">Atualiza sozinha a cada voto.</span></p>';
+ CARGOS.forEach(c=>{
+  const{cs,br,nu,tot}=dados(c),max=cs.length?cs[0].n:0,p=n=>tot?(n/tot*100).toFixed(1):'0.0';
+  h+=`<section class="card"><h2>${c.nome}</h2><p class="mut">Total de votos: ${tot}</p>`;
+  if(!cs.length)h+='<p class="mut">Nenhum candidato cadastrado.</p>';
+  cs.forEach(x=>h+=`<div class="row"><span>${esc(x.num)} · ${esc(x.nome)} <small>${esc(x.partido)}</small> ${max>0&&x.n===max?'<em>líder</em>':''}</span><span>${x.n} (${p(x.n)}%)</span><div class="bar"><i style="width:${p(x.n)}%"></i></div></div>`);
+  h+=`<div class="row"><span>Brancos</span><span>${br} (${p(br)}%)</span><div class="bar"><i style="width:${p(br)}%"></i></div></div>`;
+  h+=`<div class="row"><span>Nulos</span><span>${nu} (${p(nu)}%)</span><div class="bar"><i style="width:${p(nu)}%"></i></div></div></section>`;
+ });
+ if(!CARGOS.length)h+='<section class="card"><p class="mut">Nenhum cargo cadastrado. Crie em Candidatos.</p></section>';
+ h+=`<button class="btn dg" id="zr">${zerar?'Clique de novo para zerar todos os votos':'Zerar votos'}</button>`;
+ $('#out').innerHTML=h;
+ $('#zr').onclick=()=>{if(zerar){db=carregar();db.votes={};salvar();zerar=false}else zerar=true;apurar()};
+ $('#csv').onclick=()=>{
+  let r=[['cargo','numero','nome','partido','votos']];
+  CARGOS.forEach(c=>{const{cs,br,nu}=dados(c);cs.forEach(x=>r.push([c.nome,x.num,x.nome,x.partido,x.n]));r.push([c.nome,'','Brancos','',br]);r.push([c.nome,'','Nulos','',nu])});
+  const t=r.map(l=>l.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='apuracao.csv';a.click();
+ };
+}
+exigirPin(()=>{apurar();window.addEventListener('storage',apurar)});
+</script></body></html>
